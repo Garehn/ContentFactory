@@ -18,6 +18,7 @@ export default function Home() {
     const [generatingVoice, setGeneratingVoice] = useState(false);
     const [sceneImages, setSceneImages] = useState<Record<number, string>>({});
     const [generatingImages, setGeneratingImages] = useState(false);
+    const [exporting, setExporting] = useState(false);
 
     const generateScript = async () => {
         if (!topic) return;
@@ -124,6 +125,43 @@ export default function Home() {
         }
     };
 
+    const handleExport = async () => {
+        if (!script) return;
+
+        setExporting(true);
+        try {
+            console.log('📹 Initiating video export...');
+
+            const res = await fetch('/api/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    script,
+                    audioUrl,
+                    sceneImages
+                })
+            });
+
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${script.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${Date.now()}.mp4`;
+                a.click();
+                URL.revokeObjectURL(url);
+                console.log('✅ Video exported successfully');
+            } else {
+                throw new Error('Export failed');
+            }
+        } catch (e) {
+            console.error('Export error:', e);
+            alert('Failed to export video. Please try again.');
+        } finally {
+            setExporting(false);
+        }
+    };
+
     return (
         <main className="min-h-screen bg-slate-950 text-white p-8 font-sans selection:bg-purple-500/30">
             <div className="max-w-4xl mx-auto space-y-12">
@@ -206,11 +244,25 @@ export default function Home() {
                             </h3>
                             <VideoPlayer script={script} audioUrl={audioUrl} sceneImages={sceneImages} />
                             <div className="flex gap-2">
-                                <button className="flex-1 bg-slate-800 hover:bg-slate-700 py-3 rounded-lg text-sm font-medium transition-colors">
-                                    Regenerate Script
+                                <button
+                                    onClick={() => generateScript()}
+                                    className="flex-1 bg-slate-800 hover:bg-slate-700 py-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                                >
+                                    🔄 Regenerate Script
                                 </button>
-                                <button className="flex-1 bg-emerald-600 hover:bg-emerald-500 py-3 rounded-lg text-sm font-medium transition-colors">
-                                    Export MP4
+                                <button
+                                    onClick={handleExport}
+                                    disabled={exporting}
+                                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed py-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                                >
+                                    {exporting ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            Exporting...
+                                        </>
+                                    ) : (
+                                        <>📹 Export MP4</>
+                                    )}
                                 </button>
                             </div>
                         </div>
