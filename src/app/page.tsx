@@ -14,10 +14,13 @@ export default function Home() {
     const [topic, setTopic] = useState('');
     const [loading, setLoading] = useState(false);
     const [script, setScript] = useState<any>(null);
+    const [audioUrl, setAudioUrl] = useState<string | null>(null);
+    const [generatingVoice, setGeneratingVoice] = useState(false);
 
     const generateScript = async () => {
         if (!topic) return;
         setLoading(true);
+        setAudioUrl(null); // Reset audio
         try {
             const res = await fetch('/api/generate', {
                 method: 'POST',
@@ -27,12 +30,44 @@ export default function Home() {
             const data = await res.json();
             if (data.video && data.video.script) {
                 setScript(data.video.script);
+                // Automatically generate voiceover
+                await generateVoiceover(data.video.script);
             }
         } catch (e) {
             console.error(e);
             alert("Failed to generate script.");
         } finally {
             setLoading(false);
+        }
+    };
+
+    const generateVoiceover = async (scriptData: any) => {
+        setGeneratingVoice(true);
+        try {
+            // Combine all scene text into narration
+            const narration = scriptData.scenes
+                .map((scene: any) => scene.text)
+                .join(' ');
+
+            const res = await fetch('/api/voice', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: narration })
+            });
+
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                setAudioUrl(url);
+                console.log('✅ Voiceover generated successfully');
+            } else {
+                console.warn('Voice generation failed, continuing without audio');
+            }
+        } catch (e) {
+            console.error('Voiceover error:', e);
+            // Don't block the UI if voice fails
+        } finally {
+            setGeneratingVoice(false);
         }
     };
 
@@ -103,8 +138,14 @@ export default function Home() {
                             <h3 className="text-xl font-semibold text-slate-200 flex items-center gap-2">
                                 <span className="w-2 h-8 bg-emerald-500 rounded-full" />
                                 Live Preview
+                                {generatingVoice && (
+                                    <span className="text-xs text-purple-400 flex items-center gap-1">
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                        Generating voice...
+                                    </span>
+                                )}
                             </h3>
-                            <VideoPlayer script={script} />
+                            <VideoPlayer script={script} audioUrl={audioUrl} />
                             <div className="flex gap-2">
                                 <button className="flex-1 bg-slate-800 hover:bg-slate-700 py-3 rounded-lg text-sm font-medium transition-colors">
                                     Regenerate Script

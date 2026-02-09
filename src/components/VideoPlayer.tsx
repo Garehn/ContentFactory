@@ -6,7 +6,7 @@ import { Player } from '@remotion/player';
 
 import { MyVideo } from '../remotion/Main';
 
-export default function VideoPlayer({ script }: { script: any }) {
+export default function VideoPlayer({ script, audioUrl }: { script: any; audioUrl?: string | null }) {
 
     if (!script) return null;
 
@@ -23,7 +23,8 @@ export default function VideoPlayer({ script }: { script: any }) {
                 loop
                 inputProps={{
                     title: script.title,
-                    scenes: script.scenes
+                    scenes: script.scenes,
+                    audioSrc: audioUrl || undefined
                 }}
                 style={{
                     width: '100%',
