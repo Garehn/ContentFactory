@@ -16,11 +16,14 @@ export default function Home() {
     const [script, setScript] = useState<any>(null);
     const [audioUrl, setAudioUrl] = useState<string | null>(null);
     const [generatingVoice, setGeneratingVoice] = useState(false);
+    const [sceneImages, setSceneImages] = useState<Record<number, string>>({});
+    const [generatingImages, setGeneratingImages] = useState(false);
 
     const generateScript = async () => {
         if (!topic) return;
         setLoading(true);
         setAudioUrl(null); // Reset audio
+        setSceneImages({}); // Reset images
         try {
             const res = await fetch('/api/generate', {
                 method: 'POST',
@@ -30,8 +33,11 @@ export default function Home() {
             const data = await res.json();
             if (data.video && data.video.script) {
                 setScript(data.video.script);
-                // Automatically generate voiceover
-                await generateVoiceover(data.video.script);
+                // Automatically generate voiceover and images
+                await Promise.all([
+                    generateVoiceover(data.video.script),
+                    generateImages(data.video.script)
+                ]);
             }
         } catch (e) {
             console.error(e);
@@ -68,6 +74,53 @@ export default function Home() {
             // Don't block the UI if voice fails
         } finally {
             setGeneratingVoice(false);
+        }
+    };
+
+    const generateImages = async (scriptData: any) => {
+        setGeneratingImages(true);
+        const imageMap: Record<number, string> = {};
+
+        try {
+            console.log('🎨 Generating B-roll images for', scriptData.scenes.length, 'scenes');
+
+            // Generate images for each scene (limit to first 5 to avoid rate limits)
+            const scenesToGenerate = scriptData.scenes.slice(0, 5);
+
+            const imagePromises = scenesToGenerate.map(async (scene: any, index: number) => {
+                try {
+                    const res = await fetch('/api/generate-image', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            visualCue: scene.visual_cue,
+                            sceneText: scene.text
+                        })
+                    });
+
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.imageUrl) {
+                            imageMap[index] = data.imageUrl;
+                            console.log(`✅ Generated image ${index + 1}/${scenesToGenerate.length}`);
+                        }
+                    } else {
+                        console.warn(`Image generation failed for scene ${index + 1}`);
+                    }
+                } catch (err) {
+                    console.error(`Error generating image for scene ${index + 1}:`, err);
+                }
+            });
+
+            await Promise.all(imagePromises);
+            setSceneImages(imageMap);
+            console.log('🎨 All images generated:', Object.keys(imageMap).length);
+
+        } catch (e) {
+            console.error('Image generation error:', e);
+            // Don't block the UI if images fail
+        } finally {
+            setGeneratingImages(false);
         }
     };
 
@@ -144,8 +197,14 @@ export default function Home() {
                                         Generating voice...
                                     </span>
                                 )}
+                                {generatingImages && (
+                                    <span className="text-xs text-blue-400 flex items-center gap-1">
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                        Generating images... ({Object.keys(sceneImages).length}/5)
+                                    </span>
+                                )}
                             </h3>
-                            <VideoPlayer script={script} audioUrl={audioUrl} />
+                            <VideoPlayer script={script} audioUrl={audioUrl} sceneImages={sceneImages} />
                             <div className="flex gap-2">
                                 <button className="flex-1 bg-slate-800 hover:bg-slate-700 py-3 rounded-lg text-sm font-medium transition-colors">
                                     Regenerate Script

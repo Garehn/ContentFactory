@@ -11,11 +11,12 @@ export const myVideoSchema = z.object({
         duration_estimate: z.number(),
     })),
     audioSrc: z.string().optional(),
+    sceneImages: z.record(z.string()).optional(),
 });
 
 export type MyVideoProps = z.infer<typeof myVideoSchema>;
 
-export const MyVideo: React.FC<MyVideoProps> = ({ title, scenes, audioSrc }) => {
+export const MyVideo: React.FC<MyVideoProps> = ({ title, scenes, audioSrc, sceneImages = {} }) => {
     return (
         <>
             {audioSrc && <Audio src={audioSrc} />}
@@ -27,9 +28,14 @@ export const MyVideo: React.FC<MyVideoProps> = ({ title, scenes, audioSrc }) => 
 
                 {scenes.map((scene, i) => {
                     const durationInFrames = Math.floor(scene.duration_estimate * 30);
+                    const imageUrl = sceneImages?.[i.toString()];
                     return (
                         <Series.Sequence key={i} durationInFrames={durationInFrames}>
-                            <Scene text={scene.text} visual_cue={scene.visual_cue} />
+                            <Scene
+                                text={scene.text}
+                                visual_cue={scene.visual_cue}
+                                imageUrl={imageUrl}
+                            />
                         </Series.Sequence>
                     );
                 })}

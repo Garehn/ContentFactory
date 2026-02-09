@@ -1,7 +1,11 @@
 
-import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } from 'remotion';
+import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring, Img } from 'remotion';
 
-export const Scene: React.FC<{ text: string; visual_cue?: string }> = ({ text, visual_cue }) => {
+export const Scene: React.FC<{
+    text: string;
+    visual_cue?: string;
+    imageUrl?: string;
+}> = ({ text, visual_cue, imageUrl }) => {
     const frame = useCurrentFrame();
     const { fps } = useVideoConfig();
 
@@ -25,9 +29,30 @@ export const Scene: React.FC<{ text: string; visual_cue?: string }> = ({ text, v
             style={{
                 justifyContent: 'center',
                 alignItems: 'center',
-                backgroundColor: 'black', // Default background
+                backgroundColor: 'black', // Fallback background
             }}
         >
+            {/* Background Image */}
+            {imageUrl && (
+                <>
+                    <Img
+                        src={imageUrl}
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                        }}
+                    />
+                    {/* Dark overlay for text readability */}
+                    <AbsoluteFill
+                        style={{
+                            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                        }}
+                    />
+                </>
+            )}
+
+            {/* Text Content */}
             <h1
                 style={{
                     color: 'white',
@@ -38,6 +63,8 @@ export const Scene: React.FC<{ text: string; visual_cue?: string }> = ({ text, v
                     opacity,
                     padding: 40,
                     fontFamily: 'Inter, sans-serif',
+                    zIndex: 10,
+                    textShadow: '2px 2px 10px rgba(0,0,0,0.8)',
                 }}
             >
                 {text}
@@ -47,8 +74,9 @@ export const Scene: React.FC<{ text: string; visual_cue?: string }> = ({ text, v
                     position: 'absolute',
                     bottom: 50,
                     fontSize: 20,
-                    color: '#666',
-                    fontStyle: 'italic'
+                    color: imageUrl ? '#ccc' : '#666',
+                    fontStyle: 'italic',
+                    zIndex: 10,
                 }}>
                     [Visual: {visual_cue}]
                 </div>
