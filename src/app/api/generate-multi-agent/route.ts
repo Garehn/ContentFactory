@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 
 const anthropic = new Anthropic({
@@ -6,22 +6,6 @@ const anthropic = new Anthropic({
 });
 
 // Types for our multi-agent system
-interface StrategicBrief {
-    audienceProfile: string;
-    emotionalJourney: string;
-    perspectiveBomb: string;
-    successCriteria: string[];
-    kurzgesagtMechanisms: string[];
-}
-
-interface ResearchDossier {
-    counterintuitiveFacts: Array<{ fact: string; source: string; visualPotential: string }>;
-    timeline: string;
-    futureImplications: string;
-    hopeAngle: string;
-    metaphors: Array<{ metaphor: string; visual: string }>;
-}
-
 interface Script {
     title: string;
     scenes: Array<{
@@ -29,7 +13,7 @@ interface Script {
         visual_cue: string;
         duration_estimate: number;
     }>;
-    wordCount: number;
+    wordCount?: number;
 }
 
 interface QualityAssessment {
@@ -47,63 +31,94 @@ interface QualityAssessment {
 }
 
 interface GenerationProgress {
-    stage: 'strategist' | 'investigator' | 'scribe' | 'refiner' | 'complete';
+    stage: 'strategist' | 'investigator' | 'scribe' | 'refiner' | 'complete' | 'error';
     percentage: number;
     currentAgent: string;
     output?: any;
+    error?: string;
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+    console.log('🚀 Multi-agent generation started');
+
+    // Parse request body BEFORE creating the stream
+    let topic: string;
+    let audience: string;
+
+    try {
+        const body = await req.json();
+        topic = body.topic;
+        audience = body.audience;
+
+        if (!topic) {
+            console.error('❌ No topic provided');
+            return NextResponse.json({ error: 'Topic is required' }, { status: 400 });
+        }
+
+        console.log(`📝 Topic: "${topic}"`);
+        console.log(`👥 Audience: "${audience || 'default'}"`);
+
+    } catch (error) {
+        console.error('❌ Failed to parse request body:', error);
+        return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+    }
+
+    const defaultAudience = audience || "Curious generalists aged 18-35 who love science/philosophy content";
     const encoder = new TextEncoder();
+
     const stream = new ReadableStream({
         async start(controller) {
+            // Helper to send progress updates
+            const sendProgress = (stage: GenerationProgress['stage'], percentage: number, currentAgent: string, output?: any, error?: string) => {
+                const progress: GenerationProgress = { stage, percentage, currentAgent, output, error };
+                const message = `data: ${JSON.stringify(progress)}\n\n`;
+                console.log(`📊 Progress: ${percentage}% - ${currentAgent}`);
+                controller.enqueue(encoder.encode(message));
+            };
+
             try {
-                const { topic, audience } = await req.json();
-
-                if (!topic) {
-                    controller.close();
-                    return;
-                }
-
-                const defaultAudience = audience || "Curious generalists aged 18-35 who love science/philosophy content";
-
-                // Helper to send progress updates
-                const sendProgress = (stage: GenerationProgress['stage'], percentage: number, currentAgent: string, output?: any) => {
-                    const progress: GenerationProgress = { stage, percentage, currentAgent, output };
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify(progress)}\n\n`));
-                };
-
                 // AGENT 1: THE STRATEGIST
+                console.log('🎯 Starting Agent 1: Strategist');
                 sendProgress('strategist', 10, 'Agent 1: Strategist analyzing audience and crafting angle...');
 
                 const strategicBrief = await runStrategist(topic, defaultAudience);
+                console.log(`✅ Strategist complete (${strategicBrief.length} chars)`);
                 sendProgress('strategist', 25, 'Agent 1: Strategic Brief complete', { brief: strategicBrief });
 
                 // AGENT 2: THE INVESTIGATOR
+                console.log('🔍 Starting Agent 2: Investigator');
                 sendProgress('investigator', 30, 'Agent 2: Investigator gathering counterintuitive facts...');
 
                 const researchDossier = await runInvestigator(topic, strategicBrief);
+                console.log(`✅ Investigator complete (${researchDossier.length} chars)`);
                 sendProgress('investigator', 50, 'Agent 2: Research Dossier complete', { dossier: researchDossier });
 
                 // AGENT 3: THE SCRIBE (Initial Draft)
+                console.log('✍️ Starting Agent 3: Scribe');
                 sendProgress('scribe', 55, 'Agent 3: Scribe writing initial draft...');
 
                 let script = await runScribe(topic, strategicBrief, researchDossier);
+                console.log(`✅ Scribe complete: "${script.title}" with ${script.scenes.length} scenes`);
                 sendProgress('scribe', 70, 'Agent 3: Draft script complete', { script });
 
                 // AGENT 4: THE REFINER (Revision Loop)
+                console.log('🔬 Starting Agent 4: Refiner');
                 let revisionCount = 0;
                 let assessment: QualityAssessment;
 
                 do {
+                    console.log(`🔬 Refiner evaluation round ${revisionCount + 1}`);
                     sendProgress('refiner', 75 + (revisionCount * 10), `Agent 4: Refiner evaluating (Round ${revisionCount + 1})...`);
 
                     assessment = await runRefiner(strategicBrief, researchDossier, script);
+                    console.log(`📊 Assessment: ${assessment.decision} (${assessment.overallScore}/60)`);
                     sendProgress('refiner', 80 + (revisionCount * 10), `Agent 4: Assessment complete`, { assessment });
 
                     if (assessment.decision === 'REVISE' && revisionCount < 2) {
+                        console.log(`🔄 Revision required. Sending back to Scribe...`);
                         sendProgress('scribe', 85 + (revisionCount * 5), `Agent 3: Revising script (Round ${revisionCount + 1})...`);
                         script = await runScribe(topic, strategicBrief, researchDossier, assessment.revisionRequests);
+                        console.log(`✅ Revision ${revisionCount + 1} complete`);
                         revisionCount++;
                     } else {
                         break;
@@ -111,6 +126,7 @@ export async function POST(req: Request) {
                 } while (assessment.decision === 'REVISE' && revisionCount < 2);
 
                 // Final output
+                console.log(`🎉 Generation complete! Decision: ${assessment.decision}`);
                 sendProgress('complete', 100, 'Production ready!', {
                     script,
                     assessment,
@@ -121,9 +137,11 @@ export async function POST(req: Request) {
 
                 controller.close();
 
-            } catch (error) {
-                console.error('Multi-agent orchestration error:', error);
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Generation failed' })}\n\n`));
+            } catch (error: any) {
+                console.error('❌ Multi-agent orchestration error:', error);
+                console.error('Error stack:', error.stack);
+
+                sendProgress('error', 0, 'Generation failed', undefined, error.message || 'Unknown error');
                 controller.close();
             }
         }
@@ -140,6 +158,8 @@ export async function POST(req: Request) {
 
 // AGENT 1: STRATEGIST
 async function runStrategist(topic: string, audience: string): Promise<string> {
+    console.log('🎯 Strategist: Calling Claude API...');
+
     const systemPrompt = `You are THE STRATEGIST — a master audience psychologist and creative director.
 
 Your ONLY job: Create a Strategic Brief that gives the Investigator and Scribe everything they need to create a viral Kurzgesagt-style video.
@@ -166,19 +186,28 @@ Output a detailed strategic brief covering:
 
 Be specific and actionable. This brief will guide all subsequent agents.`;
 
-    const msg = await anthropic.messages.create({
-        model: "claude-3-opus-20240229",
-        max_tokens: 3000,
-        temperature: 0.7,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }]
-    });
+    try {
+        const msg = await anthropic.messages.create({
+            model: "claude-3-5-sonnet-20241022",
+            max_tokens: 3000,
+            temperature: 0.7,
+            system: systemPrompt,
+            messages: [{ role: "user", content: userPrompt }]
+        });
 
-    return msg.content[0].type === 'text' ? msg.content[0].text : '';
+        const result = msg.content[0].type === 'text' ? msg.content[0].text : '';
+        console.log(`✅ Strategist: Received ${result.length} characters`);
+        return result;
+    } catch (error: any) {
+        console.error('❌ Strategist failed:', error.message);
+        throw error;
+    }
 }
 
 // AGENT 2: INVESTIGATOR
 async function runInvestigator(topic: string, strategicBrief: string): Promise<string> {
+    console.log('🔍 Investigator: Calling Claude API...');
+
     const systemPrompt = `You are THE INVESTIGATOR — a research ninja who finds facts that blow minds.
 
 Your ONLY job: Build a Research Dossier with counterintuitive facts, metaphors, and the hope angle.
@@ -206,15 +235,22 @@ Output a research dossier with:
 
 Be specific with visual descriptions. Think: "What would look amazing animated?"`;
 
-    const msg = await anthropic.messages.create({
-        model: "claude-3-opus-20240229",
-        max_tokens: 3000,
-        temperature: 0.7,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }]
-    });
+    try {
+        const msg = await anthropic.messages.create({
+            model: "claude-3-5-sonnet-20241022",
+            max_tokens: 3000,
+            temperature: 0.7,
+            system: systemPrompt,
+            messages: [{ role: "user", content: userPrompt }]
+        });
 
-    return msg.content[0].type === 'text' ? msg.content[0].text : '';
+        const result = msg.content[0].type === 'text' ? msg.content[0].text : '';
+        console.log(`✅ Investigator: Received ${result.length} characters`);
+        return result;
+    } catch (error: any) {
+        console.error('❌ Investigator failed:', error.message);
+        throw error;
+    }
 }
 
 // AGENT 3: SCRIBE
@@ -224,6 +260,8 @@ async function runScribe(
     researchDossier: string,
     revisionRequests?: string[]
 ): Promise<Script> {
+    console.log('✍️ Scribe: Calling Claude API...');
+
     const systemPrompt = `You are THE SCRIBE — a master storyteller who writes in the Kurzgesagt voice.
 
 Your ONLY job: Write a 250-300 word script following the 3-Act structure.
@@ -269,27 +307,35 @@ Structure:
 - ACT 2 (0:20-1:30): Journey with metaphors, perspective bomb
 - ACT 3 (1:30-2:00): Resolution with hope/agency
 
-Use "we" voice. Include clear [VISUAL] cues in scenes.`;
+Use "we" voice. Include clear visual cues in scenes.`;
 
-    const msg = await anthropic.messages.create({
-        model: "claude-3-opus-20240229",
-        max_tokens: 3000,
-        temperature: 0.8,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }]
-    });
+    try {
+        const msg = await anthropic.messages.create({
+            model: "claude-3-5-sonnet-20241022",
+            max_tokens: 3000,
+            temperature: 0.8,
+            system: systemPrompt,
+            messages: [{ role: "user", content: userPrompt }]
+        });
 
-    const responseText = msg.content[0].type === 'text' ? msg.content[0].text : '';
+        const responseText = msg.content[0].type === 'text' ? msg.content[0].text : '';
+        console.log(`✅ Scribe: Received ${responseText.length} characters`);
 
-    // Extract JSON
-    let jsonText = responseText;
-    const jsonMatch = jsonText.match(/```json\n?([\s\S]*?)\n?```/) ||
-        jsonText.match(/```\n?([\s\S]*?)\n?```/);
-    if (jsonMatch) {
-        jsonText = jsonMatch[1];
+        // Extract JSON
+        let jsonText = responseText;
+        const jsonMatch = jsonText.match(/```json\n?([\s\S]*?)\n?```/) ||
+            jsonText.match(/```\n?([\s\S]*?)\n?```/);
+        if (jsonMatch) {
+            jsonText = jsonMatch[1];
+        }
+
+        const parsed = JSON.parse(jsonText);
+        console.log(`✅ Scribe: Parsed script with ${parsed.scenes?.length || 0} scenes`);
+        return parsed;
+    } catch (error: any) {
+        console.error('❌ Scribe failed:', error.message);
+        throw error;
     }
-
-    return JSON.parse(jsonText);
 }
 
 // AGENT 4: REFINER
@@ -298,6 +344,8 @@ async function runRefiner(
     researchDossier: string,
     script: Script
 ): Promise<QualityAssessment> {
+    console.log('🔬 Refiner: Calling Claude API...');
+
     const systemPrompt = `You are THE REFINER — a ruthless quality assurance specialist.
 
 Your ONLY job: Score the script and provide specific revision requests if needed.
@@ -344,23 +392,31 @@ Output ONLY valid JSON with this structure:
 Score each metric 1-10. If ANY score < 8, set decision to "REVISE" and provide SPECIFIC revision requests.
 If all scores ≥ 8, set decision to "APPROVED".`;
 
-    const msg = await anthropic.messages.create({
-        model: "claude-3-opus-20240229",
-        max_tokens: 2000,
-        temperature: 0.3,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }]
-    });
+    try {
+        const msg = await anthropic.messages.create({
+            model: "claude-3-5-sonnet-20241022",
+            max_tokens: 2000,
+            temperature: 0.3,
+            system: systemPrompt,
+            messages: [{ role: "user", content: userPrompt }]
+        });
 
-    const responseText = msg.content[0].type === 'text' ? msg.content[0].text : '';
+        const responseText = msg.content[0].type === 'text' ? msg.content[0].text : '';
+        console.log(`✅ Refiner: Received ${responseText.length} characters`);
 
-    // Extract JSON
-    let jsonText = responseText;
-    const jsonMatch = jsonText.match(/```json\n?([\s\S]*?)\n?```/) ||
-        jsonText.match(/```\n?([\s\S]*?)\n?```/);
-    if (jsonMatch) {
-        jsonText = jsonMatch[1];
+        // Extract JSON
+        let jsonText = responseText;
+        const jsonMatch = jsonText.match(/```json\n?([\s\S]*?)\n?```/) ||
+            jsonText.match(/```\n?([\s\S]*?)\n?```/);
+        if (jsonMatch) {
+            jsonText = jsonMatch[1];
+        }
+
+        const parsed = JSON.parse(jsonText);
+        console.log(`✅ Refiner: Decision = ${parsed.decision}, Score = ${parsed.overallScore}/60`);
+        return parsed;
+    } catch (error: any) {
+        console.error('❌ Refiner failed:', error.message);
+        throw error;
     }
-
-    return JSON.parse(jsonText);
 }
