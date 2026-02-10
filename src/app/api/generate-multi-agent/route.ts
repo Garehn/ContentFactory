@@ -344,7 +344,7 @@ Use "we" voice. Include DETAILED visual cues (hex colors, particle effects, char
     try {
         const msg = await anthropic.messages.create({
             model: "claude-3-haiku-20240307",
-            max_tokens: 8000, // Increased for full-length scripts
+            max_tokens: 4096, // Haiku's max limit
             temperature: 0.8,
             system: systemPrompt,
             messages: [{ role: "user", content: userPrompt }]
