@@ -1,6 +1,6 @@
 
 import { Series, Audio } from 'remotion';
-import { Scene } from './Scene';
+import { MotionGraphicsScene } from './MotionGraphicsScene';
 import { z } from 'zod';
 
 export const myVideoSchema = z.object({
@@ -8,10 +8,12 @@ export const myVideoSchema = z.object({
     scenes: z.array(z.object({
         text: z.string(),
         visual_cue: z.string(),
-        duration_estimate: z.union([z.number(), z.string()]), // Accept both string and number
+        duration_estimate: z.union([z.number(), z.string()]),
+        visual_category: z.string().optional(),
+        image_url: z.string().optional(),
     })),
     audioSrc: z.string().optional(),
-    sceneImages: z.record(z.string()).optional(),
+    sceneImages: z.record(z.string(), z.string()).optional(),
 });
 
 export type MyVideoProps = z.infer<typeof myVideoSchema>;
@@ -58,20 +60,21 @@ export const MyVideo: React.FC<MyVideoProps> = ({ title, scenes, audioSrc, scene
         <>
             {audioSrc && <Audio src={audioSrc} />}
             <Series>
-                {/* Title Scene */}
-                <Series.Sequence durationInFrames={90}> {/* 3 seconds for title */}
-                    <Scene text={title} visual_cue="Title Card" />
-                </Series.Sequence>
-
+                {/* NO TITLE SCENE - Jump straight into content */}
                 {scenes.map((scene, i) => {
                     const durationInFrames = parseDurationToFrames(scene.duration_estimate);
-                    const imageUrl = sceneImages?.[i.toString()];
+
+                    // Use image_url from scene if available, fallback to sceneImages prop
+                    const imageUrl = scene.image_url || sceneImages?.[i.toString()];
+
                     return (
                         <Series.Sequence key={i} durationInFrames={durationInFrames}>
-                            <Scene
+                            <MotionGraphicsScene
                                 text={scene.text}
                                 visual_cue={scene.visual_cue}
-                                imageUrl={imageUrl}
+                                visual_category={scene.visual_category}
+                                image_url={imageUrl}
+                                durationInFrames={durationInFrames}
                             />
                         </Series.Sequence>
                     );
