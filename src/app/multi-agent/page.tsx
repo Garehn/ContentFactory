@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Loader2, Clapperboard, Sparkles, Target, Search, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, Clapperboard, Sparkles, Target, Search, FileText, CheckCircle2, AlertCircle, Image } from 'lucide-react';
 
 const VideoPlayer = dynamic(() => import('@/components/VideoPlayer'), {
     ssr: false,
@@ -72,22 +72,27 @@ export default function MultiAgentPage() {
 
                 for (const line of lines) {
                     if (line.startsWith('data: ')) {
-                        const data = JSON.parse(line.slice(6));
+                        try {
+                            const data = JSON.parse(line.slice(6));
 
-                        setProgress(data);
+                            setProgress(data);
 
-                        // Store outputs as they complete
-                        if (data.output?.brief) setStrategicBrief(data.output.brief);
-                        if (data.output?.dossier) setResearchDossier(data.output.dossier);
-                        if (data.output?.script) setScript(data.output.script);
-                        if (data.output?.assessment) setQualityAssessment(data.output.assessment);
+                            // Store outputs as they complete
+                            if (data.output?.brief) setStrategicBrief(data.output.brief);
+                            if (data.output?.dossier) setResearchDossier(data.output.dossier);
+                            if (data.output?.script) setScript(data.output.script);
+                            if (data.output?.assessment) setQualityAssessment(data.output.assessment);
 
-                        // When complete, trigger voiceover and images
-                        if (data.stage === 'complete' && data.output?.script) {
-                            await Promise.all([
-                                generateVoiceover(data.output.script),
-                                generateImages(data.output.script)
-                            ]);
+                            // When complete, trigger voiceover and images
+                            if (data.stage === 'complete' && data.output?.script) {
+                                await Promise.all([
+                                    generateVoiceover(data.output.script),
+                                    generateImages(data.output.script)
+                                ]);
+                            }
+                        } catch (parseError) {
+                            console.error('Failed to parse SSE data:', line.substring(0, 100), parseError);
+                            // Continue to next line instead of crashing
                         }
                     }
                 }
@@ -167,6 +172,7 @@ export default function MultiAgentPage() {
             case 'strategist': return <Target className="w-5 h-5" />;
             case 'investigator': return <Search className="w-5 h-5" />;
             case 'scribe': return <FileText className="w-5 h-5" />;
+            case 'broll': return <Image className="w-5 h-5" />;
             case 'refiner': return <CheckCircle2 className="w-5 h-5" />;
             default: return <Sparkles className="w-5 h-5" />;
         }
@@ -260,11 +266,12 @@ export default function MultiAgentPage() {
                         </div>
 
                         {/* Agent Status Pills */}
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-5 gap-2">
                             {[
                                 { name: 'Strategist', stage: 'strategist' },
                                 { name: 'Investigator', stage: 'investigator' },
                                 { name: 'Scribe', stage: 'scribe' },
+                                { name: 'B-roll Artist', stage: 'broll' },
                                 { name: 'Refiner', stage: 'refiner' }
                             ].map(({ name, stage }) => (
                                 <div
@@ -407,6 +414,7 @@ function getStagePercentage(stage: string): number {
         case 'strategist': return 25;
         case 'investigator': return 50;
         case 'scribe': return 70;
+        case 'broll': return 85;
         case 'refiner': return 90;
         default: return 0;
     }
