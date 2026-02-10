@@ -188,7 +188,7 @@ Be specific and actionable. This brief will guide all subsequent agents.`;
 
     try {
         const msg = await anthropic.messages.create({
-            model: "claude-3-5-sonnet-20241022",
+            model: "claude-3-haiku-20240307",
             max_tokens: 3000,
             temperature: 0.7,
             system: systemPrompt,
@@ -237,7 +237,7 @@ Be specific with visual descriptions. Think: "What would look amazing animated?"
 
     try {
         const msg = await anthropic.messages.create({
-            model: "claude-3-5-sonnet-20241022",
+            model: "claude-3-haiku-20240307",
             max_tokens: 3000,
             temperature: 0.7,
             system: systemPrompt,
@@ -311,7 +311,7 @@ Use "we" voice. Include clear visual cues in scenes.`;
 
     try {
         const msg = await anthropic.messages.create({
-            model: "claude-3-5-sonnet-20241022",
+            model: "claude-3-haiku-20240307",
             max_tokens: 3000,
             temperature: 0.8,
             system: systemPrompt,
@@ -394,7 +394,7 @@ If all scores ≥ 8, set decision to "APPROVED".`;
 
     try {
         const msg = await anthropic.messages.create({
-            model: "claude-3-5-sonnet-20241022",
+            model: "claude-3-haiku-20240307",
             max_tokens: 2000,
             temperature: 0.3,
             system: systemPrompt,
