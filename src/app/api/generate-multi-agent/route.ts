@@ -44,11 +44,13 @@ export async function POST(req: NextRequest) {
     // Parse request body BEFORE creating the stream
     let topic: string;
     let audience: string;
+    let cta: string;
 
     try {
         const body = await req.json();
         topic = body.topic;
         audience = body.audience;
+        cta = body.cta;
 
         if (!topic) {
             console.error('❌ No topic provided');
@@ -57,6 +59,7 @@ export async function POST(req: NextRequest) {
 
         console.log(`📝 Topic: "${topic}"`);
         console.log(`👥 Audience: "${audience || 'default'}"`);
+        console.log(`🎯 CTA: "${cta || 'none'}"`);
 
     } catch (error) {
         console.error('❌ Failed to parse request body:', error);
@@ -94,10 +97,10 @@ export async function POST(req: NextRequest) {
                 sendProgress('investigator', 50, 'Agent 2: Research Dossier complete', { dossier: researchDossier });
 
                 // AGENT 3: THE SCRIBE (Initial Draft)
-                console.log('✍️ Starting Agent 3: Scribe');
+                console.log(' Starting Agent 3: Scribe');
                 sendProgress('scribe', 55, 'Agent 3: Scribe writing initial draft...');
 
-                let script = await runScribe(topic, strategicBrief, researchDossier);
+                let script = await runScribe(topic, strategicBrief, researchDossier, cta);
                 console.log(`✅ Scribe complete: "${script.title}" with ${script.scenes.length} scenes`);
                 sendProgress('scribe', 70, 'Agent 3: Draft script complete', { script });
 
@@ -117,7 +120,7 @@ export async function POST(req: NextRequest) {
                     if (assessment.decision === 'REVISE' && revisionCount < 2) {
                         console.log(`🔄 Revision required. Sending back to Scribe...`);
                         sendProgress('scribe', 85 + (revisionCount * 5), `Agent 3: Revising script (Round ${revisionCount + 1})...`);
-                        script = await runScribe(topic, strategicBrief, researchDossier, assessment.revisionRequests);
+                        script = await runScribe(topic, strategicBrief, researchDossier, cta, assessment.revisionRequests);
                         console.log(`✅ Revision ${revisionCount + 1} complete`);
                         revisionCount++;
                     } else {
@@ -258,15 +261,17 @@ async function runScribe(
     topic: string,
     strategicBrief: string,
     researchDossier: string,
+    cta?: string,
     revisionRequests?: string[]
 ): Promise<Script> {
     console.log('✍️ Scribe: Calling Claude API...');
 
     const systemPrompt = `You are THE SCRIBE — a master storyteller who writes in the Kurzgesagt voice.
 
-Your ONLY job: Write a 250-300 word script following the 3-Act structure.
+Your job: Write a FULL-LENGTH educational video script (8-15 minutes, approximately 1,500-3,000 words).
 
 MINDSET:
+- Take the time to fully explore the topic - this is NOT a short video
 - Every word must earn its place
 - Read it aloud — does it flow?
 - Think: "Would I watch this?"
@@ -276,43 +281,70 @@ Follow the Kurzgesagt voice rules EXACTLY:
 - Short punchy sentences
 - No jargon without translation
 - Optimistic framing
+- Seamless CTA integration (if provided)
 
 Quality over speed. Use as many tokens as needed to get this right.`;
 
-    let userPrompt = `Write a 250-300 word Kurzgesagt-style script about: "${topic}"
+    const ctaGuidance = cta ? `
+
+CALL-TO-ACTION INTEGRATION (MANDATORY):
+The video must end with a natural transition to: "${cta}"
+
+The CTA must:
+1. Feel like a natural extension of the video's theme
+2. NOT sound like an advertisement
+3. Use "we" language to stay collaborative
+4. Connect to the journey we just took
+5. Be the logical next step for the viewer
+
+Example CTA transitions:
+- "Understanding [topic] is just the beginning. If you want to actually master these concepts through interactive problem-solving, check out [CTA]..."
+- "The science of [topic] evolves every day. To stay informed as we figure this out together, [CTA]..."
+- "Videos like this take weeks to create. If you want to help us keep exploring the nature of reality, [CTA]..."
+
+The CTA should be in the final 30-45 seconds of the video.` : '';
+
+    let userPrompt = `Write a FULL-LENGTH (8-15 minute) Kurzgesagt-style script about: "${topic}"
 
 STRATEGIC BRIEF:
 ${strategicBrief}
 
 RESEARCH DOSSIER:
 ${researchDossier}
-
-${revisionRequests ? `\nREVISION REQUESTS FROM REFINER:\n${revisionRequests.join('\n')}` : ''}
+${ctaGuidance}
+${revisionRequests ? `\n\nREVISION REQUESTS FROM REFINER:\n${revisionRequests.join('\n')}` : ''}
 
 Output ONLY valid JSON with this structure:
 {
-  "title": "Short punchy title (under 6 words)",
+  "title": "Punchy title (3-8 words)",
+  "total_duration_estimate": "11:30",
   "scenes": [
     {
       "text": "Scene narration",
-      "visual_cue": "Detailed visual description for animators",
-      "duration_estimate": 4.5
+      "visual_cue": "Detailed Kurzgesagt-style visual (include colors, characters, particle effects)",
+      "duration_estimate": "30s",
+      "visual_category": "hook"
     }
   ],
-  "wordCount": 280
+  "wordCount": 2250
 }
 
-Structure:
-- ACT 1 (0:00-0:20): Hook with counterintuitive fact
-- ACT 2 (0:20-1:30): Journey with metaphors, perspective bomb
-- ACT 3 (1:30-2:00): Resolution with hope/agency
+Structure (8-12 minute video):
+- ACT 1 (0:00-2:00): Hook + Setup (~500 words, 4-5 scenes)
+- ACT 2 (2:00-10:00): Deep Dive (~1500 words, 12-15 scenes)
+- ACT 3 (10:00-11:30): Cosmic Zoom-Out (~300 words, 2-3 scenes)
+- ACT 4 (11:30-13:00): Optimistic Turn + CTA (~400 words, 3-4 scenes)
 
-Use "we" voice. Include clear visual cues in scenes.`;
+Total: 20-25 scenes, 1,500-3,000 words
+
+Visual categories: hook, explanation, scale, juxtaposition, transition, cta
+
+Use "we" voice. Include DETAILED visual cues (hex colors, particle effects, character actions).`;
 
     try {
         const msg = await anthropic.messages.create({
             model: "claude-3-haiku-20240307",
-            max_tokens: 3000,
+            max_tokens: 8000, // Increased for full-length scripts
             temperature: 0.8,
             system: systemPrompt,
             messages: [{ role: "user", content: userPrompt }]

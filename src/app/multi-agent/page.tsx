@@ -19,6 +19,7 @@ interface AgentProgress {
 export default function MultiAgentPage() {
     const [topic, setTopic] = useState('');
     const [audience, setAudience] = useState('');
+    const [cta, setCta] = useState('');
     const [generating, setGenerating] = useState(false);
     const [progress, setProgress] = useState<AgentProgress | null>(null);
 
@@ -52,7 +53,8 @@ export default function MultiAgentPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     topic,
-                    audience: audience || undefined
+                    audience: audience || undefined,
+                    cta: cta || undefined
                 })
             });
 
@@ -214,6 +216,18 @@ export default function MultiAgentPage() {
                         />
                     </div>
 
+                    <div className="space-y-2">
+                        <label className="text-sm text-slate-400">Call-to-Action / Dream Outcome (Optional) 🎯</label>
+                        <input
+                            type="text"
+                            placeholder="e.g., 'Visit brilliant.org/kurzgesagt' or 'Join our Patreon community' or 'Subscribe for weekly science news'"
+                            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-6 py-4 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500 transition-colors"
+                            value={cta}
+                            onChange={(e) => setCta(e.target.value)}
+                        />
+                        <p className="text-xs text-slate-500 italic">The AI will seamlessly integrate this into the final 30-45 seconds of the video</p>
+                    </div>
+
                     <button
                         onClick={generateWithMultiAgent}
                         disabled={generating || !topic}
@@ -256,10 +270,10 @@ export default function MultiAgentPage() {
                                 <div
                                     key={stage}
                                     className={`px-3 py-2 rounded-lg text-sm text-center transition-all ${progress.stage === stage
-                                            ? 'bg-purple-600 text-white'
-                                            : progress.percentage > getStagePercentage(stage)
-                                                ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-600'
-                                                : 'bg-slate-800 text-slate-500'
+                                        ? 'bg-purple-600 text-white'
+                                        : progress.percentage > getStagePercentage(stage)
+                                            ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-600'
+                                            : 'bg-slate-800 text-slate-500'
                                         }`}
                                 >
                                     {name}
