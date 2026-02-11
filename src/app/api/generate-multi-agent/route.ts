@@ -141,6 +141,37 @@ export async function POST(req: NextRequest) {
                     }
                 } while (assessment.decision === 'REVISE' && revisionCount < 2);
 
+                // AGENT 6: VOICEOVER GENERATION
+                console.log('🎙️ Generating voiceover with ElevenLabs...');
+                sendProgress('complete', 95, 'Generating voiceover...');
+
+                let audioUrl: string | null = null;
+                try {
+                    // Combine all scene text into full script narration
+                    const fullNarration = script.scenes.map(s => s.text).join(' ');
+
+                    console.log(`🎙️ Narration length: ${fullNarration.length} chars`);
+
+                    // Call voice generation API
+                    const voiceResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/voice`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: fullNarration })
+                    });
+
+                    if (voiceResponse.ok) {
+                        const audioBuffer = await voiceResponse.arrayBuffer();
+                        const base64Audio = Buffer.from(audioBuffer).toString('base64');
+                        audioUrl = `data:audio/mpeg;base64,${base64Audio}`;
+                        console.log(`✅ Voiceover generated: ${Math.floor(audioBuffer.byteLength / 1024)}KB`);
+                    } else {
+                        console.error('❌ Voice generation failed:', await voiceResponse.text());
+                    }
+                } catch (voiceError: any) {
+                    console.error('❌ Voiceover error:', voiceError.message);
+                    // Continue without voiceover rather than failing entire generation
+                }
+
                 // Final output
                 console.log(`🎉 Generation complete! Decision: ${assessment.decision}`);
                 sendProgress('complete', 100, 'Production ready!', {
@@ -148,7 +179,8 @@ export async function POST(req: NextRequest) {
                     assessment,
                     strategicBrief,
                     researchDossier,
-                    revisionCount
+                    revisionCount,
+                    audioUrl  // ✅ Include voiceover audio
                 });
 
                 controller.close();

@@ -83,12 +83,15 @@ export default function MultiAgentPage() {
                             if (data.output?.script) setScript(data.output.script);
                             if (data.output?.assessment) setQualityAssessment(data.output.assessment);
 
-                            // When complete, trigger voiceover and images
+                            // ✅ Capture audioUrl from backend (voiceover now generated server-side)
+                            if (data.output?.audioUrl) {
+                                setAudioUrl(data.output.audioUrl);
+                                console.log('✅ Voiceover received from backend');
+                            }
+
+                            // When complete, only generate images (voiceover already done server-side)
                             if (data.stage === 'complete' && data.output?.script) {
-                                await Promise.all([
-                                    generateVoiceover(data.output.script),
-                                    generateImages(data.output.script)
-                                ]);
+                                await generateImages(data.output.script);
                             }
                         } catch (parseError) {
                             console.error('Failed to parse SSE data:', line.substring(0, 100), parseError);
